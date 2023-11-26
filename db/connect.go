@@ -2,10 +2,14 @@ package dbConnection
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 )
 
@@ -23,16 +27,17 @@ func goDotEnvVariable(key string) string {
 }
 
 func Connect() (*sql.DB, error) {
-    cfg := mysql.Config {
-        User: goDotEnvVariable("DB_USER"),
-        Passwd: goDotEnvVariable("DB_PASS"),
-        Net: "tcp",
-        Addr: "127.0.0.1:3306",
-        DBName: "test",
-    }
+    cfg := fmt.Sprintf("%s:%s@%s(%s)/%s",
+         goDotEnvVariable("DB_USER"),
+         goDotEnvVariable("DB_PASS"),
+         "tcp",
+         "127.0.0.1:3306",
+         "test",
+    )
 
     var err error
-    db, err = sql.Open("mysql", cfg.FormatDSN())
+    db, err := sql.Open("mysql", cfg)
+
     if err != nil {
         return nil, err
     }
@@ -41,6 +46,28 @@ func Connect() (*sql.DB, error) {
     if err != nil {
         return nil, err
     }
+
+    driver, driverErr := mysql.WithInstance(db, &mysql.Config{})
+    if driverErr != nil {
+        log.Fatalf("Could not initialize migrate instance: %v\n", driverErr)
+        return nil, driverErr
+    }
+    m, migrationErr := migrate.NewWithDatabaseInstance(
+        "file://C:/Users/bshar/OneDrive/Desktop/fullstack/3tiers/web-service-gin/db/migrations",
+        "mysql", driver)
+
+    if migrationErr != nil {
+        log.Fatalf("Could not initialize migrate instance: %v\n", migrationErr)
+        return nil, migrationErr
+    }
+
+    err = m.Up()
+    if err != nil && err != migrate.ErrNoChange {
+        log.Fatalf("Could not migrate: %v\n", err)
+        return nil, err
+    }
+    
+    fmt.Println("Migration completed")
 	println("Connected to database")
     return db, nil
 }
