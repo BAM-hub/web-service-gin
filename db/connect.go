@@ -2,34 +2,24 @@ package dbConnection
 
 import (
 	"database/sql"
+	utils "example/web-service-gin/utils"
 	"fmt"
 	"log"
-	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
 )
 
 var db *sql.DB
 
-func goDotEnvVariable(key string) string {
-    // load .env file
-    err := godotenv.Load(".env")
-  
-    if err != nil {
-      log.Fatalf("Error loading .env file")
-    }
-  
-    return os.Getenv(key)
-}
+
 
 func Connect() (*sql.DB, error) {
     cfg := fmt.Sprintf("%s:%s@%s(%s)/%s",
-         goDotEnvVariable("DB_USER"),
-         goDotEnvVariable("DB_PASS"),
+         utils.GoDotEnvVariable("DB_USER"),
+         utils.GoDotEnvVariable("DB_PASS"),
          "tcp",
          "127.0.0.1:3306",
          "test",
@@ -66,7 +56,7 @@ func Connect() (*sql.DB, error) {
         log.Fatalf("Could not migrate: %v\n", err)
         return nil, err
     }
-    
+
     fmt.Println("Migration completed")
 	println("Connected to database")
     return db, nil

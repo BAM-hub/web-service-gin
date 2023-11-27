@@ -6,24 +6,45 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
 	Id int64 `json:"id"`
 	Name string `json:"name"`
+	Email string `json:"email"`
+	Password string `json:"password"`
+	CreatedAt string `json:"created_at"`
+}
+
+type UserResponse struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	CreatedAt string `json:"created_at"`
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+func CheckPasswordHash(passowrd string, hash string) (bool) {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(passowrd))
+	return err == nil
 }
 
 func GetUserByName(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
-	var user User
+	var user UserResponse
 	name := c.Query("name")
 	if(name == "") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name parameter required"})
 		return
 	}
-	row := db.QueryRow("SELECT * FROM user WHERE name = ?", name)
+	row := db.QueryRow("SELECT id, name, email, created_at FROM user WHERE name = ?", name)
 	
-	if err := row.Scan(&user.Id, &user.Name); err != nil {
+	if err := row.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
@@ -39,9 +60,14 @@ func GetUserByName(c *gin.Context) {
 func CreateUser(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 	var user User 
-
+	hash, hashErr := HashPassword(user.Password) 
+	if hashErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	user.Password = hash
 	if err := c.BindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSOn"})
 		return
 	}
 
@@ -49,14 +75,24 @@ func CreateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name fieled is required"})
 		return
 	}
+
+	if(user.Email == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email fieled is required"})
+		return
+	}
+
+	if(user.Password == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password fieled is required"})
+		return
+	}
 	
-	stmt, err := db.Prepare("INSERT INTO user(name) VALUES(?)")
+	stmt, err := db.Prepare("INSERT INTO user(name, email, password) VALUES(?,?,?)")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	row, insertErr := stmt.Exec(user.Name)
+	row, insertErr := stmt.Exec(user.Name, user.Email, hash)
 
 	if insertErr != nil {
 		if insertErr.(*mysql.MySQLError).Number == 1062 {
@@ -78,22 +114,23 @@ func CreateUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "user created successfully", "user":
-		  User{Name: user.Name, Id: userId}})
+		  User{Name: user.Name, Id: userId, Email: user.Email}})
 }
 
 func GetUsers(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
-	var users []User
-	rows, err := db.Query("SELECT * FROM user")
+	var users []UserResponse
+	rows, err := db.Query("SELECT id, name, email, created_at FROM user")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error, " + err.Error()})
 		return
 	}
 
 	for rows.Next() {
-		var user User
-		if err := rows.Scan(&user.Id, &user.Name); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		var user UserResponse
+		if err := rows.Scan(&user.Id, &user.Name, &user.Email, &user.CreatedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error" + err.Error()})
 			return
 		}
 		users = append(users, user)
