@@ -9,20 +9,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type User struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Password string `json:"password"`
-	CreatedAt string `json:"created_at"`
-}
-
-type UserResponse struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	CreatedAt string `json:"created_at"`
-}
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
